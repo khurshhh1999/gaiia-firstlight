@@ -67,3 +67,14 @@ test('traversal terminates on cycles and shared descendants', () => {
   assert.equal(r.devices.length, 3);
   assert.deepEqual(r.accounts, ['one']);
 });
+
+test('nothing is classified as stale or removable until a full sync has compared NetBox with gaiia', () => {
+  const m = initialMigration();
+  assert.equal(m.compared, false);
+  assert.equal(removeStaleBlock(m, '198.51.100.0/24').removed, false);
+  assert.deepEqual(restoreInNetbox(m, '203.0.113.0/25'), m);
+  assert.match(cutoverGates(m, { notice: true, rollback: true })[2].detail, /Not compared yet/);
+  const synced = fullSync(m);
+  assert.equal(synced.compared, true);
+  assert.match(synced.log.at(-1)!, /2 integration block\(s\) no longer exist in NetBox, 1 of them still carrying subscribers/);
+});

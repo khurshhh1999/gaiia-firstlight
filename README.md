@@ -84,7 +84,7 @@ src/
   network-panel.tsx Migration screen
   lab-panels.tsx    Calix mapping editor, order editor, simulated-world panel, attempt history
   components/       affectUI Button and Segmented Control (MIT)
-tests/              26 tests on the same pure functions the UI runs
+tests/              29 tests on the same pure functions the UI runs
 ```
 
 The engines are pure, deterministic TypeScript with no framework dependency. The React layer only renders their output, and the **Source** button in the app shows the exact code driving each screen.
@@ -94,7 +94,7 @@ The engines are pure, deterministic TypeScript with no framework dependency. The
 ```sh
 npm ci
 npm run dev        # http://127.0.0.1:5173
-npm test           # node:test, 26 tests
+npm test           # node:test, 29 tests
 npm run build      # type-check and production build
 ```
 

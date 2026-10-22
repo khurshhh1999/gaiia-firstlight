@@ -8,7 +8,7 @@ const prefixLabel: Record<PrefixState, [string, string]> = {
   'not-site-scoped': ['Not synced: region-scoped', 'muted'], 'role-filtered': ['Not synced: role filter', 'muted'],
 };
 const blockLabel: Record<BlockState, [string, string]> = {
-  'in-sync': ['In NetBox', 'good'], stale: ['Deleted in NetBox · 0 active', 'bad'], 'stale-in-use': ['Deleted in NetBox · still in use', 'bad'], manual: ['Manual · outside sync', 'muted'],
+  'in-sync': ['In NetBox', 'good'], stale: ['Deleted in NetBox · safe to remove', 'bad'], 'stale-in-use': ['Deleted in NetBox · still in use', 'bad'], manual: ['Manual · outside sync', 'muted'],
 };
 
 export function NetworkPanel({ migration: m, onChange, attest, onAttest, gates }: {
@@ -32,16 +32,16 @@ export function NetworkPanel({ migration: m, onChange, attest, onAttest, gates }
       <div className="network-actions"><Button size="sm" variant="secondary" disabled={a.nameMatches} onClick={() => change(renameGaiiaSite(m, m.netboxSite))}>Rename gaiia site to {m.netboxSite}</Button><Button size="sm" onClick={() => change(fullSync(m))}>Run full sync</Button></div>
 
       <div className="network-table"><div className="network-table-head">NETBOX PREFIXES · ROLE FILTER: {m.roleFilter.join(', ')}</div>
-        {a.prefixes.map(({ prefix: p, state }) => <div key={p.id}><code>{p.cidr}</code><span>{p.description}<small>{p.scope.type}: {p.scope.name} · role {p.role ?? 'none'}</small></span><b className={prefixLabel[state][1]}>{prefixLabel[state][0]}</b></div>)}</div>
+        {a.prefixes.map(({ prefix: p, state }) => <div key={p.id}><code>{p.cidr}</code><span>{p.description}<small>{p.scope.type}: {p.scope.name} · role {p.role ?? 'none'}</small></span>{m.compared ? <b className={prefixLabel[state][1]}>{prefixLabel[state][0]}</b> : <b className="muted">Not compared yet</b>}</div>)}</div>
 
       <div className="network-table"><div className="network-table-head">GAIIA IP BLOCKS · ACTIVE ADDRESSES FROM BNG LEASE EXPORT</div>
         {a.blocks.map(({ block: b, state }) => <div key={b.id}><code>{b.cidr}</code><span>{b.description}<small>{b.origin === 'netbox' ? 'Created by integration' : 'Created by hand'} · {m.activeAddresses[b.cidr] ?? 0} active</small></span>
-          <b className={blockLabel[state][1]}>{blockLabel[state][0]}</b>
-          {state === 'stale' && <Button size="sm" variant="secondary" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Remove</Button>}
-          {state === 'stale-in-use' && <><Button size="sm" variant="ghost" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Try remove</Button><Button size="sm" variant="secondary" onClick={() => change(restoreInNetbox(m, b.cidr))}>Restore in NetBox</Button></>}
-          {state === 'manual' && <Button size="sm" variant="ghost" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Try remove</Button>}</div>)}</div>
+          {!m.compared ? <b className="muted">Not compared yet</b> : <b className={blockLabel[state][1]}>{blockLabel[state][0]}</b>}
+          {m.compared && state === 'stale' && <Button size="sm" variant="secondary" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Remove</Button>}
+          {m.compared && state === 'stale-in-use' && <><Button size="sm" variant="ghost" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Try remove</Button><Button size="sm" variant="secondary" onClick={() => change(restoreInNetbox(m, b.cidr))}>Restore in NetBox</Button></>}
+          {m.compared && state === 'manual' && <Button size="sm" variant="ghost" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Try remove</Button>}</div>)}</div>
 
-      <div className="network-finding"><b>{a.mismatched} skipped by name · {a.missing} missing · {a.stale} stale · {a.staleInUse} stale but in use</b>
+      <div className="network-finding"><b>{m.compared ? `${a.mismatched} skipped by name · ${a.missing} missing · ${a.stale} stale · ${a.staleInUse} stale but in use` : 'Not compared yet. Run a full sync to diff NetBox against gaiia.'}</b>
         <p>Full sync only adds. Deletes missed while the webhook couldn’t match have to be removed by hand, and only after checking that nothing is still using the prefix.</p></div>
     </div>
 

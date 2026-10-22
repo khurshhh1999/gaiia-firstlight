@@ -153,3 +153,20 @@ test('execute never mutates its input', () => {
   run(start, 'stale-ont-config');
   assert.deepEqual(start, snapshot);
 });
+
+test('re-running a failure reuses the open ticket instead of stacking duplicates', () => {
+  let conflict = run(newRehearsal(), 'stale-ont-config');
+  conflict = run(run(conflict));
+  assert.equal(conflict.world.exceptions.length, 1);
+  let failed = run(newRehearsal(), 'activation-api-error');
+  failed = run(failed, 'activation-api-error');
+  assert.equal(failed.world.exceptions.length, 1);
+  assert.match(failed.events.at(-1)!.message, /already open/);
+});
+
+test('a failure scenario replayed against a live service does not touch it', () => {
+  const active = run(newRehearsal());
+  const replay = run(active, 'low-light');
+  assert.equal(replay.world.ont.rxDbm, active.world.ont.rxDbm);
+  assert.equal(replay.events.filter(e => e.status === 'scenario').length, 0);
+});

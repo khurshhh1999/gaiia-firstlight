@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ArrowRight, ArrowUpRight, Check, ChevronRight, Circle, Clock3, Code2, CreditCard, Download, FileText, GitBranch, Network, PanelLeftClose, Play, RotateCcw, Router, Server, ShieldCheck, Terminal, X, AlertTriangle, Activity, CircleHelp, CheckCheck, Wrench, Ticket, ListChecks } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Check, ChevronRight, Circle, Clock3, Code2, CreditCard, Download, FileText, GitBranch, Network, Play, RotateCcw, Router, Server, ShieldCheck, Terminal, X, AlertTriangle, Activity, CircleHelp, CheckCheck, Wrench, Ticket } from 'lucide-react';
 import { SegmentedControl } from './components/segmented-control';
 import { Button } from './components/button';
 import { execute, faults, initialConfig, initialOrder, newRehearsal, preflight, recordFieldRepair, releaseForeignService, steps } from './engine';
@@ -62,6 +62,15 @@ function App() {
   const runId = useRef(0);
   const revision = useRef(1);
   useEffect(() => { if (dialog) dialogRef.current?.showModal(); else dialogRef.current?.close(); }, [dialog]);
+  // Switching stage from far down the page would otherwise leave the new stage off-screen.
+  const tabsRef = useRef<HTMLDivElement>(null);
+  const go = (next: Tab) => {
+    setTab(next);
+    requestAnimationFrame(() => {
+      const top = tabsRef.current?.getBoundingClientRect().top ?? 0;
+      if (top < 0) tabsRef.current?.scrollIntoView({ block: 'start', behavior: 'smooth' });
+    });
+  };
 
   const site = siteContext(migration);
   const { checks, resolution } = preflight(order, config, site);
@@ -114,12 +123,6 @@ function App() {
     migration, cutoverGates: gates, calixConfig: config, order, preflight: checks, resolution, rehearsal, attempts: records,
   }, null, 2), 'application/json');
 
-  const nav = [
-    { id: 'migration', name: 'Migration', icon: Server },
-    { id: 'preflight', name: 'Preflight', icon: ListChecks },
-    { id: 'activation', name: 'Activation', icon: GitBranch },
-    { id: 'handoff', name: 'Handoff', icon: FileText },
-  ] as const;
   const heading: Record<Tab, [string, string, string]> = {
     migration: ['CHG-021 · Valley-POP-01', 'NetBox migration', 'Repair the prefix sync, decide what can safely be removed, and review who the cutover touches.'],
     preflight: [order.key, 'Activation preflight', 'Check the Calix mappings, inventory and site address pools before anything is written.'],
@@ -130,37 +133,28 @@ function App() {
   const faultGroups = [...new Set(faults.map(f => f.group))];
 
   return <div className="app-shell">
-    <aside className="sidebar">
-      <a href="#" className="wordmark" onClick={e => { e.preventDefault(); setTab('migration'); }}><span className="logo"><Activity size={17}/></span>FirstLight <span className="version">/ lab</span></a>
-      <div className="workspace-picker"><span className="workspace-avatar">JV</span><div><b>Juniper Valley Fiber</b><span>Go-live rehearsal</span></div></div>
-      <div className="nav-caption">IMPLEMENTATION</div>
-      <nav aria-label="Workspace navigation">{nav.map(n => <button key={n.id} className={tab === n.id ? 'nav-item current' : 'nav-item'} onClick={() => setTab(n.id)} aria-current={tab === n.id ? 'page' : undefined}>
-        <n.icon size={16}/>{n.name}
-        {n.id === 'migration' && !cutoverReady && <span className="nav-count">Hold</span>}
-        {n.id === 'preflight' && blockers.length > 0 && <span className="nav-count">{blockers.length}</span>}
-      </button>)}</nav>
-      <div className="sidebar-order"><span className="nav-caption">CURRENT ORDER</span><div><span className={`order-dot ${rehearsal.status === 'active' ? 'live' : ''}`}/> {order.key}</div><p>{order.accountId} · {order.product}<br/>{order.ont.model} · {order.pon}</p></div>
-      <div className="sidebar-bottom">
-        <button onClick={() => setDialog('help')}><CircleHelp size={15}/> Walkthrough</button>
-        <a href="https://support.gaiia.com/hc/en-us/articles/49085616236443-NetBox-Integration" target="_blank" rel="noreferrer"><ArrowUpRight size={15}/> gaiia NetBox docs</a>
-        <a href="https://support.gaiia.com/hc/en-us/articles/44225588902299-Workflow-Builder-Overview" target="_blank" rel="noreferrer"><ArrowUpRight size={15}/> gaiia Workflow Builder</a>
-        <div className="profile"><span>KK</span><div><b>Khursheed Khan</b><small>FDE candidate project</small></div></div>
-      </div>
-    </aside>
     <div className="main-shell">
-      <header className="app-header"><div><PanelLeftClose size={16}/><span className="header-divider"/><span>Juniper Valley Fiber</span><ChevronRight size={13}/><b>{nav.find(n => n.id === tab)?.name}</b></div><span className="environment"><span/> Simulated</span></header>
+      <header className="app-header topbar">
+        <div><a href="#" className="wordmark" onClick={e => { e.preventDefault(); go('migration'); }}><span className="logo"><Activity size={15}/></span>FirstLight</a><span className="header-divider"/><span>Juniper Valley Fiber</span><ChevronRight size={13}/><b>{order.key} · {order.accountId}</b></div>
+        <nav className="header-links" aria-label="Project links">
+          <button onClick={() => setDialog('help')}><CircleHelp size={14}/> Walkthrough</button>
+          <a href="https://github.com/khurshhh1999/gaiia-firstlight" target="_blank" rel="noreferrer"><ArrowUpRight size={14}/> GitHub</a>
+          <a href="https://support.gaiia.com/hc/en-us/articles/49085616236443-NetBox-Integration" target="_blank" rel="noreferrer"><ArrowUpRight size={14}/> gaiia docs</a>
+          <span className="environment"><span/> Simulated</span>
+        </nav>
+      </header>
       <main>
         <div className="page-heading"><div><div className="breadcrumb">Implementation <span>/</span> {heading[tab][0]}</div><h1>{heading[tab][1]}</h1><p>{heading[tab][2]}</p></div>
           <div className="heading-actions"><Button variant="secondary" icon={<Code2 size={15}/>} onClick={() => setDialog('source')}>Source</Button><Button variant="secondary" disabled={running} icon={<Download size={15}/>} onClick={exportBrief}>Export handoff</Button></div></div>
 
         <ol className="golive" aria-label="Go-live readiness">
-          <li className={cutoverReady ? 'done' : 'hold'}><button onClick={() => setTab('migration')}><b>Site data</b><span>{cutoverReady ? 'CHG-021 ready' : 'CHG-021 on hold'}</span></button></li>
-          <li className={blockers.length ? 'hold' : 'done'}><button onClick={() => setTab('preflight')}><b>Preflight</b><span>{blockers.length ? `${blockers.length} blocking` : 'Clear'}</span></button></li>
-          <li className={rehearsal.status === 'active' ? 'done' : rehearsal.runs ? 'hold' : ''}><button onClick={() => setTab('activation')}><b>Activation</b><span>{rehearsal.runs ? statusText[rehearsal.status] : 'Not run'}</span></button></li>
-          <li className={rehearsal.status === 'active' && cutoverReady ? 'done' : ''}><button onClick={() => setTab('handoff')}><b>Handoff</b><span>{rehearsal.status === 'active' && cutoverReady ? 'Ready to share' : 'Draft'}</span></button></li>
+          <li className={cutoverReady ? 'done' : 'hold'}><button onClick={() => go('migration')}><b>Site data</b><span>{cutoverReady ? 'CHG-021 ready' : 'CHG-021 on hold'}</span></button></li>
+          <li className={blockers.length ? 'hold' : 'done'}><button onClick={() => go('preflight')}><b>Preflight</b><span>{blockers.length ? `${blockers.length} blocking` : 'Clear'}</span></button></li>
+          <li className={rehearsal.status === 'active' ? 'done' : rehearsal.runs ? 'hold' : ''}><button onClick={() => go('activation')}><b>Activation</b><span>{rehearsal.runs ? statusText[rehearsal.status] : 'Not run'}</span></button></li>
+          <li className={rehearsal.status === 'active' && cutoverReady ? 'done' : ''}><button onClick={() => go('handoff')}><b>Handoff</b><span>{rehearsal.status === 'active' && cutoverReady ? 'Ready to share' : 'Draft'}</span></button></li>
         </ol>
 
-        <div className="section-tabs"><SegmentedControl<Tab> kind="tabs" variant="underline" aria-label="Implementation stages" value={tab} onChange={setTab}
+        <div className="section-tabs" ref={tabsRef}><SegmentedControl<Tab> kind="tabs" variant="underline" aria-label="Implementation stages" value={tab} onChange={go}
           options={[{ value: 'migration', label: 'Migration', controls: 'panel-migration' }, { value: 'preflight', label: 'Preflight', count: blockers.length || undefined, controls: 'panel-preflight' }, { value: 'activation', label: 'Activation', controls: 'panel-activation' }, { value: 'handoff', label: 'Handoff', controls: 'panel-handoff' }]}/>
           <span className="section-meta">{tab === 'migration' ? `${migration.log.length} operations` : tab === 'activation' ? `${events.length} events · ${rehearsal.runs} runs` : tab === 'preflight' ? `${checks.length} checks` : 'Generated from live state'}</span></div>
 
@@ -183,10 +177,10 @@ function App() {
             <div className="section-heading"><h2>Readiness checks</h2><span>{blockers.length ? `${blockers.length} blocking` : 'Nothing blocking'}</span></div>
             <div className="checks-table pf-table"><div className="table-head"><span>Check</span><span>Observed</span><span>Result</span></div>
               {checks.map(c => <div className="table-row" key={c.id}><span>{c.label}</span><span>{c.detail}</span><span>{severityTag(c)}</span></div>)}</div>
-            {checks.find(c => c.id === 'pools' && c.severity === 'block') && <div className="inline-issue"><AlertTriangle size={15}/><div><b>The subscriber’s address pool has not reached gaiia.</b><p>The NetBox site was renamed, so prefix webhooks for Valley-POP-01 are being skipped. Fix the sync in the migration rehearsal.</p></div><Button variant="secondary" size="sm" onClick={() => setTab('migration')}>Open migration</Button></div>}
+            {checks.find(c => c.id === 'pools' && c.severity === 'block') && <div className="inline-issue"><AlertTriangle size={15}/><div><b>The subscriber’s address pool has not reached gaiia.</b><p>The NetBox site was renamed, so prefix webhooks for Valley-POP-01 are being skipped. Fix the sync in the migration rehearsal.</p></div><Button variant="secondary" size="sm" onClick={() => go('migration')}>Open migration</Button></div>}
             <MappingEditor config={config} order={order} onChange={setConfig} disabled={running}/>
             <OrderEditor order={order} onChange={editOrder} locked={locked} onRevision={newRevision}/>
-            <div className="section-bottom"><span>{blockers.length ? 'Resolve the blocking checks before activation.' : 'Preflight is clear. Nothing has been written yet.'}</span><Button iconRight={<ArrowRight size={14}/>} onClick={() => setTab('activation')}>Rehearse activation</Button></div>
+            <div className="section-bottom"><span>{blockers.length ? 'Resolve the blocking checks before activation.' : 'Preflight is clear. Nothing has been written yet.'}</span><Button iconRight={<ArrowRight size={14}/>} onClick={() => go('activation')}>Rehearse activation</Button></div>
           </div>
           <aside className="inspector"><div className="inspector-label">STAGE <span>0{(['ont', 'olt', 'site', 'account'] as NodeId[]).indexOf(selected) + 1}</span></div>
             <h3>{nodes[selected].title}</h3><p>{nodes[selected].body}</p>
@@ -208,7 +202,7 @@ function App() {
               <select id="fault" value={fault} disabled={running} onChange={e => setFault(e.target.value as Fault)}>
                 {faultGroups.map(g => <optgroup label={g} key={g}>{faults.filter(f => f.group === g).map(f => <option key={f.value} value={f.value}>{f.label}</option>)}</optgroup>)}</select>
               <p>{faults.find(f => f.value === fault)!.description}</p>
-              {blockers.length > 0 && <div className="run-notice warning"><AlertTriangle size={15}/><div><b>{blockers.length} blocking preflight {blockers.length === 1 ? 'check' : 'checks'}</b><p>A run will stop in preflight with zero writes. That is worth seeing once.</p><button className="text-button" onClick={() => setTab('preflight')}>Review preflight <ArrowRight size={12}/></button></div></div>}
+              {blockers.length > 0 && <div className="run-notice warning"><AlertTriangle size={15}/><div><b>{blockers.length} blocking preflight {blockers.length === 1 ? 'check' : 'checks'}</b><p>A run will stop in preflight with zero writes. That is worth seeing once.</p><button className="text-button" onClick={() => go('preflight')}>Review preflight <ArrowRight size={12}/></button></div></div>}
               {!running && rehearsal.status === 'active' && <div className="run-notice success"><CheckCheck size={15}/><div><b>Service active</b><p>Replay the delivery: the workflow reads the account and exits without writing.</p></div></div>}
               {!running && rehearsal.status === 'awaiting-field' && <div className="run-notice warning"><Wrench size={15}/><div><b>Technician dispatched</b><p>Configuration is kept on the ONT for diagnosis. The account is pending and unbilled.</p><Button size="sm" variant="secondary" onClick={() => operator(r => recordFieldRepair(r), 'Field repair recorded')}>Record field repair</Button></div></div>}
               {!running && rehearsal.status === 'conflict' && world.ont.service && world.ont.service.account !== order.accountId && <div className="run-notice warning"><Ticket size={15}/><div><b>ONT belongs to {world.ont.service.account}</b><p>Nothing was overwritten. Confirm the old account is cancelled, then remove its service.</p><Button size="sm" variant="secondary" onClick={() => operator(releaseForeignService, 'Stale service removed')}>Confirm and remove old service</Button></div></div>}
@@ -250,7 +244,7 @@ function App() {
           <div className="handoff-actions"><Button variant="secondary" disabled={running} icon={<Download size={14}/>} onClick={exportJson}>Export evidence JSON</Button><span className="subtle">The handoff includes the migration log, cutover gates, mappings, preflight, every attempt and open exceptions.</span></div>
         </section>}
 
-        <footer className="app-footer"><span><Circle size={8}/> Fictional operator. Simulated NetBox, Calix SMx and gaiia; no external calls.</span><span>State lives in this tab and resets on refresh.</span></footer>
+        <footer className="app-footer"><span><Circle size={8}/> Built by Khursheed Khan. Fictional operator. Simulated NetBox, Calix SMx and gaiia; no external calls.</span><span>State lives in this tab and resets on refresh.</span></footer>
       </main>
     </div>
     <dialog ref={dialogRef} className="source-dialog" onCancel={() => setDialog(null)} onClick={e => { if (e.target === dialogRef.current) setDialog(null); }}>

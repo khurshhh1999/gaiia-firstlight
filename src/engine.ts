@@ -176,18 +176,24 @@ export function execute(previous: Rehearsal, config: CalixConfig, site: SiteCont
   const r: Rehearsal = { ...previous, runs: previous.runs + 1, events: [...previous.events], world: cloneWorld(previous.world) };
   const { order, world } = r;
   const log = (step: StepId, status: EventStatus, message: string) => r.events.push({ seq: r.events.length + 1, run: r.runs, step, status, message });
-  const open = (kind: Exception['kind'], title: string, detail: string) => {
+  // Opens a ticket or work order unless the same one is still open, so re-runs never stack duplicates.
+  const raise = (kind: Exception['kind'], title: string, detail: string, team: string) => {
+    const noun = kind === 'work-order' ? 'work order' : 'ticket';
+    const existing = world.exceptions.find(e => e.open && e.kind === kind && e.title === title);
+    if (existing) return `${existing.id} is already open. No duplicate ${noun}.`;
     const id = `${kind === 'work-order' ? 'WO' : 'TCK'}-${4100 + world.exceptions.length + 1}`;
     world.exceptions.push({ id, kind, title, detail, open: true });
-    return id;
+    return `${id} created for ${team}.`;
   };
 
   // Scenario setup changes the world before the run, the way the real network would already be.
-  if (fault === 'stale-ont-config' && !world.ont.service) {
+  // A live service is left alone: a replay against it exits before any of this could matter.
+  const live = world.accountStatus === 'active';
+  if (!live && fault === 'stale-ont-config' && !world.ont.service) {
     world.ont.service = { account: 'JV-0977', serviceTemplate: 'RES-500', policyMap: 'BRIDGE-500' };
     log('provision', 'scenario', `${world.ont.serial} came back from cancelled account JV-0977 and was never deprovisioned.`);
   }
-  if (fault === 'low-light' && world.ont.rxDbm >= RX_MIN_DBM) {
+  if (!live && fault === 'low-light' && world.ont.rxDbm >= RX_MIN_DBM) {
     world.ont.rxDbm = -29.4;
     log('verify', 'scenario', 'A dirty connector at the drop is attenuating the signal.');
   }
@@ -232,9 +238,9 @@ export function execute(previous: Rehearsal, config: CalixConfig, site: SiteCont
     const detail = foreign
       ? `${world.ont.serial} carries ${current.serviceTemplate} for ${current.account}. Confirm that account is cancelled, then remove its service before re-running.`
       : `${world.ont.serial} carries ${current.serviceTemplate}/${current.policyMap} but this order resolves to ${desired.serviceTemplate}/${desired.policyMap}. A plan change belongs in Modify Account Service, not activation.`;
-    const id = open('internal-ticket', foreign ? 'ONT holds another account’s service' : 'ONT service differs from order', detail);
+    const note = raise('internal-ticket', foreign ? 'ONT holds another account’s service' : 'ONT service differs from order', detail, 'network operations');
     log('provision', 'failed', `Not overwriting the existing configuration. ${detail}`);
-    log('provision', 'opened', `${id} created for network operations.`);
+    log('provision', 'opened', note);
     return finish('conflict');
   } else {
     let applied = false;
@@ -262,8 +268,9 @@ export function execute(previous: Rehearsal, config: CalixConfig, site: SiteCont
       applied = true;
     }
     if (!applied) {
-      const id = open('internal-ticket', 'ONT provisioning failed', `SMx did not accept the request after ${RETRY.attempts} attempts.`);
-      log('provision', 'failed', `Gave up after ${RETRY.attempts} attempts. ${id} created; account stays pending.`);
+      const note = raise('internal-ticket', 'ONT provisioning failed', `SMx did not accept the request after ${RETRY.attempts} attempts.`, 'network operations');
+      log('provision', 'failed', `Gave up after ${RETRY.attempts} attempts. Account stays pending.`);
+      log('provision', 'opened', note);
       return finish('provision-failed');
     }
   }
@@ -273,12 +280,7 @@ export function execute(previous: Rehearsal, config: CalixConfig, site: SiteCont
   if (!world.ont.online || rx < RX_MIN_DBM || rx > RX_MAX_DBM) {
     log('verify', 'failed', `${world.ont.online ? 'ONT online' : 'ONT offline'}, Rx ${rx.toFixed(1)} dBm, outside the ${RX_MIN_DBM} to ${RX_MAX_DBM} dBm window.`);
     log('verify', 'held', 'Configuration stays in place. Account stays pending, so billing has not started and no notice was sent.');
-    const existing = world.exceptions.find(e => e.kind === 'work-order' && e.open);
-    if (existing) log('verify', 'held', `${existing.id} is already open. No duplicate work order.`);
-    else {
-      const id = open('work-order', 'Low optical level at ONT', `${world.ont.serial} receives ${rx.toFixed(1)} dBm (minimum ${RX_MIN_DBM} dBm). Inspect and clean the drop connectors and splitter port, then record the new Rx.`);
-      log('verify', 'opened', `${id} created for field operations.`);
-    }
+    log('verify', 'opened', raise('work-order', 'Low optical level at ONT', `${world.ont.serial} receives ${rx.toFixed(1)} dBm (minimum ${RX_MIN_DBM} dBm). Inspect and clean the drop connectors and splitter port, then record the new Rx.`, 'field operations'));
     return finish('awaiting-field');
   }
   log('verify', 'passed', `ONT online, Rx ${rx.toFixed(1)} dBm, ${desired.serviceTemplate} active on the ONT.`);
@@ -304,8 +306,9 @@ export function execute(previous: Rehearsal, config: CalixConfig, site: SiteCont
     log('activate', 'passed', `${order.accountId} active. Pending billing subscriptions started, and one activation notice sent.`);
     return activated();
   }
-  const id = open('internal-ticket', 'Account activation failed', `Activate Account failed ${RETRY.attempts} times. The ONT is provisioned and verified, and ${order.accountId} is still pending, so it has not been billed or notified. Re-run once the API recovers.`);
-  log('activate', 'failed', `Gave up after ${RETRY.attempts} attempts. ${id} created. Service verified; account pending.`);
+  const note = raise('internal-ticket', 'Account activation failed', `Activate Account failed ${RETRY.attempts} times. The ONT is provisioned and verified, and ${order.accountId} is still pending, so it has not been billed or notified. Re-run once the API recovers.`, 'implementation');
+  log('activate', 'failed', `Gave up after ${RETRY.attempts} attempts. Service verified; account pending.`);
+  log('activate', 'opened', note);
   return finish('activation-failed');
 }
 
