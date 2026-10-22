@@ -116,4 +116,4 @@ Node 22.6+ is required for `--experimental-strip-types`. The app is static, with
 
 ---
 
-Built by Khursheed Khan. UI components: [affectUI](https://www.affectui.com) Button and Segmented Control, MIT © Florian Höller (`public/affectui-LICENSE.txt`).
+Built by Khursheed Khan · [Source on GitHub](https://github.com/khurshhh1999/gaiia-firstlight). UI components: [affectUI](https://www.affectui.com) Button and Segmented Control, MIT © Florian Höller (`public/affectui-LICENSE.txt`).
