@@ -31,3 +31,18 @@ test('the handoff brief and attempt comparison reflect the actual run', () => {
   const rows = comparison({ id: 1, label: 'x', before, after });
   assert.equal(rows.find(r => r.name === 'Account status')?.after, 'active');
 });
+
+test('attempts are labelled by what happened, not just the selected scenario', async () => {
+  const { attemptLabel } = await import('../src/lab.ts');
+  const config = initialConfig();
+  const blockedSite = siteContext(initialMigration());
+  const start = newRehearsal();
+  const blocked = execute(start, config, blockedSite, 'ack-lost-after-write');
+  assert.equal(attemptLabel(start, blocked, 'ack-lost-after-write'), 'Blocked in preflight');
+  config.products[0].taggedPolicyMap = 'AIO-1000-TAG';
+  const site = siteContext(fullSync(renameGaiiaSite(initialMigration(), 'Valley-POP-01')));
+  const active = execute(blocked, config, site, 'ack-lost-after-write');
+  assert.equal(attemptLabel(blocked, active, 'ack-lost-after-write'), 'Response lost after write');
+  const replay = execute(active, config, site, 'ack-lost-after-write');
+  assert.equal(attemptLabel(active, replay, 'ack-lost-after-write'), 'Replay delivery');
+});

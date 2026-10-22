@@ -8,6 +8,7 @@ import type { CalixConfig, Check as PreflightCheck, EventStatus, Fault, Order, R
 import { cutoverGates, initialMigration, siteContext } from './network';
 import type { Attestations, Migration } from './network';
 import { MappingEditor, OrderEditor, RunHistory, WorldPanel } from './lab-panels';
+import { attemptLabel } from './lab';
 import type { RunRecord } from './lab';
 import { NetworkPanel } from './network-panel';
 import { implementationBrief } from './brief';
@@ -93,7 +94,7 @@ function App() {
     const result = execute(rehearsal, config, site, fault);
     const start = rehearsal.events.length;
     setRehearsal(result); setOrder(result.order);
-    record(faults.find(f => f.value === fault)!.label, rehearsal, result);
+    record(attemptLabel(rehearsal, result, fault), rehearsal, result);
     for (let n = start + 1; n <= result.events.length; n++) {
       await new Promise(resolve => setTimeout(resolve, 170)); setVisible(n);
     }

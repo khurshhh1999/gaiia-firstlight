@@ -1,6 +1,15 @@
-import type { Rehearsal } from './engine.ts';
+import { faults } from './engine.ts';
+import type { Fault, Rehearsal } from './engine.ts';
 
 export interface RunRecord { id: number; label: string; before: Rehearsal; after: Rehearsal }
+
+/** Names an attempt after what actually happened, not just the scenario that was selected. */
+export function attemptLabel(before: Rehearsal, after: Rehearsal, fault: Fault): string {
+  if (fault === 'duplicate-in-flight') return 'Duplicate while running';
+  if (before.status === 'active') return 'Replay delivery';
+  if (after.status === 'blocked') return 'Blocked in preflight';
+  return faults.find(f => f.value === fault)!.label;
+}
 
 /** Before/after view of the simulated world for one attempt. */
 export function comparison(record: RunRecord) {

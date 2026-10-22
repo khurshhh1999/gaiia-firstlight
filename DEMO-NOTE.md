@@ -27,4 +27,4 @@ FirstLight rehearses one slice of a gaiia implementation: getting a fiber operat
 
 ## Code
 
-`src/engine.ts` and `src/network.ts` are pure TypeScript; the UI only renders them. 29 tests in `tests/` (`npm test`). See [README.md](README.md) for the design and sources.
+`src/engine.ts` and `src/network.ts` are pure TypeScript; the UI only renders them. 30 tests in `tests/` (`npm test`). See [README.md](README.md) for the design and sources.
