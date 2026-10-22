@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { audit, cutoverGates, fullSync, impact, initialMigration, removeStaleBlock, renameGaiiaSite, restoreInNetbox } from '../src/network.ts';
+import { audit, compareWithNetbox, cutoverGates, fullSync, impact, initialMigration, removeStaleBlock, renameGaiiaSite, restoreInNetbox } from '../src/network.ts';
 
-const repaired = () => fullSync(renameGaiiaSite(initialMigration(), 'Valley-POP-01'));
+const repaired = () => compareWithNetbox(fullSync(renameGaiiaSite(initialMigration(), 'Valley-POP-01')));
 
 test('before the rename, full sync creates nothing: the site name does not match exactly', () => {
   const m = fullSync(initialMigration());
@@ -68,13 +68,15 @@ test('traversal terminates on cycles and shared descendants', () => {
   assert.deepEqual(r.accounts, ['one']);
 });
 
-test('nothing is classified as stale or removable until a full sync has compared NetBox with gaiia', () => {
-  const m = initialMigration();
-  assert.equal(m.compared, false);
-  assert.equal(removeStaleBlock(m, '198.51.100.0/24').removed, false);
-  assert.deepEqual(restoreInNetbox(m, '203.0.113.0/25'), m);
-  assert.match(cutoverGates(m, { notice: true, rollback: true })[2].detail, /Not compared yet/);
-  const synced = fullSync(m);
-  assert.equal(synced.compared, true);
-  assert.match(synced.log.at(-1)!, /2 integration block\(s\) no longer exist in NetBox, 1 of them still carrying subscribers/);
+test('full sync never reports deletes; only an explicit comparison with NetBox finds them', () => {
+  const synced = fullSync(renameGaiiaSite(initialMigration(), 'Valley-POP-01'));
+  assert.equal(synced.synced, true);
+  assert.equal(synced.compared, false);
+  assert.doesNotMatch(synced.log.join(' '), /no longer exist/);
+  assert.equal(removeStaleBlock(synced, '198.51.100.0/24').removed, false);
+  assert.deepEqual(restoreInNetbox(synced, '203.0.113.0/25'), synced);
+  assert.match(cutoverGates(synced, { notice: true, rollback: true })[2].detail, /Not compared yet/);
+  const compared = compareWithNetbox(synced);
+  assert.match(compared.log.at(-1)!, /2 integration block\(s\) no longer exist in NetBox, 1 of them still carrying subscribers/);
+  assert.equal(removeStaleBlock(compared, '198.51.100.0/24').removed, true);
 });

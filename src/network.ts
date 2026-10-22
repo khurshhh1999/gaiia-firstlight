@@ -15,7 +15,8 @@ export interface Migration {
   prefixes: NetboxPrefix[];
   blocks: IpBlock[];                  // IP Blocks on the gaiia Network Site
   activeAddresses: Record<string, number>; // per prefix, from the operator's BNG lease export
-  compared: boolean;                // false until the first full sync diffs NetBox against gaiia
+  synced: boolean;                  // a full sync has run, so prefix outcomes are known
+  compared: boolean;                // someone has diffed gaiia's blocks against NetBox to find missed deletes
   log: string[];
 }
 
@@ -38,6 +39,7 @@ export function initialMigration(): Migration {
       { id: 'b4', cidr: '203.0.113.128/25', origin: 'manual', description: 'Static business customers' },
     ],
     activeAddresses: { '192.0.2.0/25': 41, '198.51.100.0/24': 0, '203.0.113.0/25': 14, '203.0.113.128/25': 3 },
+    synced: false,
     compared: false,
     log: [],
   };
@@ -85,18 +87,22 @@ export function fullSync(m: Migration): Migration {
   const states = m.prefixes.map(p => ({ p, s: classifyPrefix(m, p) }));
   const created = states.filter(x => x.s === 'missing').map(x => ({ id: `sync-${x.p.id}`, cidr: x.p.cidr, origin: 'netbox' as const, description: x.p.description }));
   const n = (s: PrefixState) => states.filter(x => x.s === s).length;
-  const synced: Migration = { ...m, blocks: [...m.blocks, ...created], compared: true };
-  const after = audit(synced);
-  return { ...synced,
-    log: [...m.log, `Full sync (instance “Default”): ${created.length} created, ${n('synced')} already present, ${n('site-mismatch')} skipped with no Network Site named “${m.netboxSite}”, ${n('role-filtered')} outside the role filter, ${n('not-site-scoped')} not site-scoped. 0 removed.`,
-      ...(m.compared ? [] : [`Compared gaiia IP Blocks with NetBox: ${after.stale + after.staleInUse} integration block(s) no longer exist in NetBox, ${after.staleInUse} of them still carrying subscribers.`])] };
+  return { ...m, blocks: [...m.blocks, ...created], synced: true,
+    log: [...m.log, `Full sync (instance “Default”): ${created.length} created, ${n('synced')} already present, ${n('site-mismatch')} skipped with no Network Site named “${m.netboxSite}”, ${n('role-filtered')} outside the role filter, ${n('not-site-scoped')} not site-scoped. 0 removed.`] };
+}
+
+/** Full sync never reports deletes, so the implementer diffs gaiia's blocks against NetBox by hand. */
+export function compareWithNetbox(m: Migration): Migration {
+  const r = audit(m);
+  return { ...m, compared: true,
+    log: [...m.log, `Compared gaiia IP Blocks with NetBox: ${r.stale + r.staleInUse} integration block(s) no longer exist in NetBox, ${r.staleInUse} of them still carrying subscribers.`] };
 }
 
 /** removeIpBlocksFromNetworkSite, guarded: integration-created, no longer in NetBox, and holding no live subscriber addresses. */
 export function removeStaleBlock(m: Migration, cidr: string): { migration: Migration; removed: boolean } {
   const block = m.blocks.find(b => b.cidr === cidr);
   if (!block) return { migration: m, removed: false };
-  if (!m.compared) return { migration: { ...m, log: [...m.log, `Refused to remove ${cidr}: run a full sync first so gaiia is compared with NetBox.`] }, removed: false };
+  if (!m.compared) return { migration: { ...m, log: [...m.log, `Refused to remove ${cidr}: compare gaiia with NetBox first.`] }, removed: false };
   const state = classifyBlock(m, block);
   const refuse = (why: string) => ({ migration: { ...m, log: [...m.log, `Refused to remove ${cidr}: ${why}`] }, removed: false });
   if (state === 'manual') return refuse('it was created by hand in gaiia, outside the integration’s ownership.');
@@ -154,12 +160,13 @@ export interface Attestations { notice: boolean; rollback: boolean }
 export interface Gate { name: string; passed: boolean; owner: string; detail: string; kind: 'computed' | 'attested' }
 export function cutoverGates(m: Migration, a: Attestations): Gate[] {
   const r = audit(m);
-  const notCompared = 'Not compared yet. Run a full sync.';
+  const notSynced = 'Not synced yet. Run a full sync.';
+  const notCompared = 'Not compared yet. Compare gaiia with NetBox.';
   return [
     { kind: 'computed', name: 'Site name matches NetBox', owner: 'Network engineering', passed: r.nameMatches,
       detail: r.nameMatches ? `gaiia and NetBox both use “${m.netboxSite}”.` : `NetBox “${m.netboxSite}” vs gaiia “${m.gaiiaSite.name}”. Webhooks for this site are being skipped silently.` },
-    { kind: 'computed', name: 'In-scope prefixes present in gaiia', owner: 'Network engineering', passed: m.compared && r.missing + r.mismatched === 0,
-      detail: !m.compared ? notCompared : r.missing + r.mismatched === 0 ? 'Every site-scoped, in-filter prefix has an IP Block.' : `${r.missing + r.mismatched} prefix(es) not yet in gaiia.` },
+    { kind: 'computed', name: 'In-scope prefixes present in gaiia', owner: 'Network engineering', passed: m.synced && r.missing + r.mismatched === 0,
+      detail: !m.synced ? notSynced : r.missing + r.mismatched === 0 ? 'Every site-scoped, in-filter prefix has an IP Block.' : `${r.missing + r.mismatched} prefix(es) not yet in gaiia.` },
     { kind: 'computed', name: 'Stale blocks resolved', owner: 'Network engineering', passed: m.compared && r.stale + r.staleInUse === 0,
       detail: !m.compared ? notCompared : r.stale + r.staleInUse === 0 ? 'No integration blocks left without a NetBox prefix.' : `${r.stale} safe to remove, ${r.staleInUse} still carrying live subscribers.` },
     { kind: 'attested', name: 'Maintenance notice sent to impacted accounts', owner: 'Customer success', passed: a.notice, detail: 'Confirmed by the implementation lead.' },

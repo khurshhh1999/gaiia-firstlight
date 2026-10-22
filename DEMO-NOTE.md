@@ -9,7 +9,7 @@ FirstLight rehearses one slice of a gaiia implementation: getting a fiber operat
 **1. Migration (opens first).**
 - Click **Run full sync**. Nothing is created. NetBox renamed the site to `Valley-POP-01`, and gaiia matches names exactly, so the prefixes are skipped silently.
 - Click **Rename gaiia site**, then sync again. The IPv6 pool arrives. The region-scoped and role-filtered prefixes stay out, as documented.
-- **Remove** the stale `198.51.100.0/24`. Then try `203.0.113.0/25`: it's refused because 14 subscribers are still on it. **Restore in NetBox** instead.
+- Full sync never reports deletes, so click **Compare with NetBox**. It finds two blocks NetBox deleted. **Remove** the stale `198.51.100.0/24`. Then try `203.0.113.0/25`: it's refused because 14 subscribers are still on it. **Restore in NetBox** instead.
 - Switch the change target to *OLT-01*. The suspended and pending accounts are not counted.
 
 **2. Preflight.** One blocker remains: Fiber 1000 has no Tagged Policy Map, and the 844G-1 is an all-in-one unit. Click **Use SMx value**. Preflight clears.

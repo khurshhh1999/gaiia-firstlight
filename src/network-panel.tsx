@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Button } from './components/button';
-import { audit, fullSync, impact, initialMigration, removeStaleBlock, renameGaiiaSite, restoreInNetbox, topology } from './network';
+import { audit, compareWithNetbox, fullSync, impact, initialMigration, removeStaleBlock, renameGaiiaSite, restoreInNetbox, topology } from './network';
 import type { Attestations, BlockState, Gate, Migration, PrefixState } from './network';
 
 const prefixLabel: Record<PrefixState, [string, string]> = {
@@ -29,10 +29,10 @@ export function NetworkPanel({ migration: m, onChange, attest, onAttest, gates }
       <div className="network-label">01 / RECONCILE PREFIXES</div><h3>Site association</h3>
       <div className="site-pair"><div><span>NetBox site</span><code>{m.netboxSite}</code></div><span className={a.nameMatches ? 'good' : 'bad'}>{a.nameMatches ? '=' : '≠'}</span><div><span>gaiia Network Site · {m.gaiiaSite.referenceId}</span><code>{m.gaiiaSite.name}</code></div></div>
       <p>NetBox is the source of truth, so rename the gaiia site to match. Blocks, inventory and tickets are attached to the site record and stay with it. Renaming in NetBox instead would break anything else that reads NetBox names.</p>
-      <div className="network-actions"><Button size="sm" variant="secondary" disabled={a.nameMatches} onClick={() => change(renameGaiiaSite(m, m.netboxSite))}>Rename gaiia site to {m.netboxSite}</Button><Button size="sm" onClick={() => change(fullSync(m))}>Run full sync</Button></div>
+      <div className="network-actions"><Button size="sm" variant="secondary" disabled={a.nameMatches} onClick={() => change(renameGaiiaSite(m, m.netboxSite))}>Rename gaiia site to {m.netboxSite}</Button><Button size="sm" onClick={() => change(fullSync(m))}>Run full sync</Button><Button size="sm" variant="secondary" disabled={m.compared} onClick={() => change(compareWithNetbox(m))}>Compare with NetBox</Button></div>
 
       <div className="network-table"><div className="network-table-head">NETBOX PREFIXES · ROLE FILTER: {m.roleFilter.join(', ')}</div>
-        {a.prefixes.map(({ prefix: p, state }) => <div key={p.id}><code>{p.cidr}</code><span>{p.description}<small>{p.scope.type}: {p.scope.name} · role {p.role ?? 'none'}</small></span>{m.compared ? <b className={prefixLabel[state][1]}>{prefixLabel[state][0]}</b> : <b className="muted">Not compared yet</b>}</div>)}</div>
+        {a.prefixes.map(({ prefix: p, state }) => <div key={p.id}><code>{p.cidr}</code><span>{p.description}<small>{p.scope.type}: {p.scope.name} · role {p.role ?? 'none'}</small></span>{m.synced ? <b className={prefixLabel[state][1]}>{prefixLabel[state][0]}</b> : <b className="muted">Not synced yet</b>}</div>)}</div>
 
       <div className="network-table"><div className="network-table-head">GAIIA IP BLOCKS · ACTIVE ADDRESSES FROM BNG LEASE EXPORT</div>
         {a.blocks.map(({ block: b, state }) => <div key={b.id}><code>{b.cidr}</code><span>{b.description}<small>{b.origin === 'netbox' ? 'Created by integration' : 'Created by hand'} · {m.activeAddresses[b.cidr] ?? 0} active</small></span>
@@ -41,7 +41,7 @@ export function NetworkPanel({ migration: m, onChange, attest, onAttest, gates }
           {m.compared && state === 'stale-in-use' && <><Button size="sm" variant="ghost" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Try remove</Button><Button size="sm" variant="secondary" onClick={() => change(restoreInNetbox(m, b.cidr))}>Restore in NetBox</Button></>}
           {m.compared && state === 'manual' && <Button size="sm" variant="ghost" onClick={() => change(removeStaleBlock(m, b.cidr).migration)}>Try remove</Button>}</div>)}</div>
 
-      <div className="network-finding"><b>{m.compared ? `${a.mismatched} skipped by name · ${a.missing} missing · ${a.stale} stale · ${a.staleInUse} stale but in use` : 'Not compared yet. Run a full sync to diff NetBox against gaiia.'}</b>
+      <div className="network-finding"><b>{!m.synced ? 'Not synced yet. Run a full sync.' : `${a.mismatched} skipped by name · ${a.missing} missing · ${m.compared ? `${a.stale} stale · ${a.staleInUse} stale but in use` : 'deletes not checked yet'}`}</b>
         <p>Full sync only adds. Deletes missed while the webhook couldn’t match have to be removed by hand, and only after checking that nothing is still using the prefix.</p></div>
     </div>
 

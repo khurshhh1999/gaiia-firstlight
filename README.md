@@ -23,7 +23,7 @@ FirstLight walks through finding and fixing both, then rehearses the activation 
 
 - Classifies every NetBox prefix the way the integration treats it: synced, missing, skipped because no site matches the name, outside the IPAM role filter, or not site-scoped.
 - Repairs the association by renaming the **gaiia** site, since NetBox is the source of truth. Blocks, inventory and tickets stay on the same site record.
-- Runs the additive full sync and shows that it never removes anything.
+- Runs the additive full sync, which never removes or reports deletes, then compares gaiia against NetBox by hand to find what was deleted while the webhook could not match.
 - Removes stale blocks by hand with three guards: the block must have been created by the integration, it must be gone from NetBox, and it must have **no live subscriber addresses** (from the BNG lease export). The in-use prefix is refused and restored in NetBox instead.
 - Walks gaiia's upstream/downstream inventory to scope the cutover. Like *Add Accounts from Network Sites*, it counts only active services, so suspended and pending accounts are excluded and each account is counted once.
 - Cutover gates: three are computed from the data and can't be ticked by hand, and two are human sign-offs that reset on any data change.

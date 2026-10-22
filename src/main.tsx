@@ -252,7 +252,7 @@ function App() {
       <header><h2>{dialog === 'help' ? 'Five-minute walkthrough' : tab === 'migration' ? 'src/network.ts' : 'src/engine.ts'}</h2><Button variant="ghost" icon={<X size={17}/>} aria-label="Close dialog" onClick={() => setDialog(null)}/></header>
       {dialog === 'help' ? <div className="help-body"><ol>
         <li><b>Migration.</b> Run full sync: nothing is created, because NetBox renamed the site and gaiia matches names exactly. Rename the gaiia site and sync again; the IPv6 pool arrives.</li>
-        <li>Remove the stale <code>198.51.100.0/24</code>. Try the same on <code>203.0.113.0/25</code>: it is refused, because 14 subscribers are still on it. Restore it in NetBox instead.</li>
+        <li>Click <b>Compare with NetBox</b>: full sync never reports deletes, so this finds two blocks NetBox deleted. Remove the stale <code>198.51.100.0/24</code>. Try the same on <code>203.0.113.0/25</code>: it is refused, because 14 subscribers are still on it. Restore it in NetBox instead.</li>
         <li>Pick a change target and notice that suspended and pending accounts are not counted as impacted.</li>
         <li><b>Preflight.</b> Fill the empty Tagged Policy Map. The 844G-1 is an all-in-one unit, so it needs the tagged map.</li>
         <li><b>Activation.</b> Run “Response lost after write”. The workflow reads the ONT, finds its own write and adopts it: one write, one notice. Replay the delivery and nothing changes.</li>
